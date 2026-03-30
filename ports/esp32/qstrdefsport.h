@@ -29,3 +29,9 @@
 
 // Entries for sys.path
 Q(/lib)
+
+// Keep ESP-NOW teaching helpers importable even when the low-level module is stubbed.
+Q(recvinto)
+Q(ESPNowBase)
+Q(MAX_DATA_LEN)
+Q(timeout_ms)

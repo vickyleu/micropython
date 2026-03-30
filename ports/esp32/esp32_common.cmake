@@ -43,7 +43,11 @@ if(NOT CMAKE_BUILD_EARLY_EXPANSION)
     # Enable extmod components that will be configured by extmod.cmake.
     # A board may also have enabled additional components.
     if (NOT DEFINED MICROPY_PY_BTREE)
-        set(MICROPY_PY_BTREE ON)
+        if($ENV{IDF_VERSION} VERSION_GREATER_EQUAL "6.0")
+            set(MICROPY_PY_BTREE OFF)
+        else()
+            set(MICROPY_PY_BTREE ON)
+        endif()
     endif()
 
     include(${MICROPY_DIR}/py/usermod.cmake)
@@ -70,10 +74,15 @@ list(APPEND MICROPY_SOURCE_LIB
     ${MICROPY_DIR}/lib/littlefs/lfs1_util.c
     ${MICROPY_DIR}/lib/littlefs/lfs2.c
     ${MICROPY_DIR}/lib/littlefs/lfs2_util.c
-    ${MICROPY_DIR}/lib/mbedtls_errors/esp32_mbedtls_errors.c
     ${MICROPY_DIR}/lib/oofatfs/ff.c
     ${MICROPY_DIR}/lib/oofatfs/ffunicode.c
 )
+
+if($ENV{IDF_VERSION} VERSION_LESS "6.0")
+    list(APPEND MICROPY_SOURCE_LIB
+        ${MICROPY_DIR}/lib/mbedtls_errors/esp32_mbedtls_errors.c
+    )
+endif()
 
 list(APPEND MICROPY_SOURCE_DRIVERS
     ${MICROPY_DIR}/drivers/bus/softspi.c
@@ -96,15 +105,21 @@ if(MICROPY_PY_TINYUSB)
 
     list(APPEND MICROPY_INC_TINYUSB
         ${MICROPY_DIR}/shared/tinyusb/
+        ${MICROPY_PORT_DIR}/managed_components/espressif__tinyusb/src
+        ${MICROPY_PORT_DIR}/managed_components/espressif__tinyusb/src/device
+        ${MICROPY_PORT_DIR}/managed_components/espressif__tinyusb/lib/networking
     )
 
-    # Build the Espressif tinyusb component with MicroPython shared/tinyusb/tusb_config.h
-    idf_component_get_property(tusb_lib espressif__tinyusb COMPONENT_LIB)
-    target_include_directories(${tusb_lib} PRIVATE
+    # 本地化 tinyusb 组件后，不能再依赖组件目标在此处已经完成注册。
+    # 直接把 MicroPython 的 tinyusb 配置头放到全局包含路径里。
+    include_directories(
         ${MICROPY_DIR}/shared/tinyusb
         ${MICROPY_DIR}
         ${MICROPY_PORT_DIR}
-        ${MICROPY_BOARD_DIR})
+        ${MICROPY_BOARD_DIR}
+        ${MICROPY_PORT_DIR}/managed_components/espressif__tinyusb/src
+        ${MICROPY_PORT_DIR}/managed_components/espressif__tinyusb/src/device
+        ${MICROPY_PORT_DIR}/managed_components/espressif__tinyusb/lib/networking)
 endif()
 
 list(APPEND MICROPY_SOURCE_PORT
@@ -187,18 +202,34 @@ list(APPEND IDF_COMPONENTS
     log
     lwip
     mbedtls
-    newlib
     nvs_flash
+    espressif__mdns
     sdmmc
     soc
     spi_flash
     ulp
-    usb
     vfs
 )
 
+if($ENV{IDF_VERSION} VERSION_GREATER_EQUAL "6.0")
+    list(APPEND IDF_COMPONENTS
+        esp_libc
+        esp_hal_timg
+        esp_driver_sdmmc
+        esp_driver_sdspi
+        esp_driver_tsens)
+else()
+    list(APPEND IDF_COMPONENTS
+        newlib
+        usb)
+endif()
+
 if($ENV{IDF_VERSION} VERSION_GREATER_EQUAL "5.4")
     list(APPEND IDF_COMPONENTS
+        esp_driver_i2c
+        esp_driver_ledc
+        esp_driver_pcnt
+        esp_driver_rmt
         esp_driver_touch_sens)
 endif()
 

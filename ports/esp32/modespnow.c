@@ -117,6 +117,8 @@ typedef struct _esp_espnow_obj_t {
     volatile size_t tx_responses;   // # of sent packet responses received
     volatile size_t tx_failures;    // # of sent packet responses failed
     size_t peer_count;              // Cache the # of peers for send(sync=True)
+    wifi_phy_rate_t rate;           // Default rate applied to current/future peers
+    bool rate_set;                  // Whether a default rate has been configured
     mp_obj_t recv_cb;               // Callback when a packet is received
     mp_obj_t recv_cb_arg;           // Argument passed to callback
     #if MICROPY_PY_ESPNOW_RSSI
@@ -165,6 +167,7 @@ static mp_obj_t espnow_make_new(const mp_obj_type_t *type, size_t n_args,
     self->recv_buffer_size = DEFAULT_RECV_BUFFER_SIZE;
     self->recv_timeout_ms = DEFAULT_RECV_TIMEOUT_MS;
     self->recv_buffer = NULL;       // Buffer is allocated in espnow_init()
+    self->rate_set = false;
     self->recv_cb = mp_const_none;
     #if MICROPY_PY_ESPNOW_RSSI
     self->peers_table = mp_obj_new_dict(0);
@@ -195,6 +198,41 @@ static wifi_mode_t get_wifi_mode(void) {
         mp_raise_OSError(MP_ENOENT);
     }
     return mode;
+}
+
+static wifi_phy_mode_t espnow_phy_mode_from_rate(wifi_phy_rate_t rate) {
+    if (rate == WIFI_PHY_RATE_LORA_250K || rate == WIFI_PHY_RATE_LORA_500K) {
+        return WIFI_PHY_MODE_LR;
+    }
+    if (rate <= WIFI_PHY_RATE_11M_S) {
+        return WIFI_PHY_MODE_11B;
+    }
+    if (rate <= WIFI_PHY_RATE_9M) {
+        return WIFI_PHY_MODE_11G;
+    }
+    return WIFI_PHY_MODE_HT20;
+}
+
+static void espnow_set_rate_for_peer(const uint8_t *peer_addr, wifi_phy_rate_t rate) {
+    esp_now_rate_config_t config = {
+        .phymode = espnow_phy_mode_from_rate(rate),
+        .rate = rate,
+        .ersu = false,
+        .dcm = false,
+    };
+    check_esp_err(esp_now_set_peer_rate_config(peer_addr, &config));
+}
+
+static void espnow_apply_rate_to_existing_peers(esp_espnow_obj_t *self) {
+    if (!self->rate_set) {
+        return;
+    }
+    esp_now_peer_info_t peer = {0};
+    bool from_head = true;
+    while (esp_now_fetch_peer(from_head, &peer) == ESP_OK) {
+        espnow_set_rate_for_peer(peer.peer_addr, self->rate);
+        from_head = false;
+    }
 }
 
 // ESPNow.init(): Initialise the data buffers and ESP-NOW functions.
@@ -269,13 +307,10 @@ static mp_obj_t espnow_config(size_t n_args, const mp_obj_t *pos_args, mp_map_t 
         self->recv_timeout_ms = args[ARG_timeout_ms].u_int;
     }
     if (args[ARG_rate].u_int >= 0) {
-        wifi_mode_t mode = get_wifi_mode();
-        if (mode == WIFI_MODE_STA || mode == WIFI_MODE_APSTA) {
-            check_esp_err(esp_wifi_config_espnow_rate(ESP_IF_WIFI_STA, args[ARG_rate].u_int));
-        }
-        if (mode == WIFI_MODE_AP || mode == WIFI_MODE_APSTA) {
-            check_esp_err(esp_wifi_config_espnow_rate(ESP_IF_WIFI_AP, args[ARG_rate].u_int));
-        }
+        get_wifi_mode();
+        self->rate = (wifi_phy_rate_t)args[ARG_rate].u_int;
+        self->rate_set = true;
+        espnow_apply_rate_to_existing_peers(self);
     }
     if (args[ARG_get].u_obj == MP_OBJ_NULL) {
         return mp_const_none;
@@ -678,6 +713,7 @@ static mp_obj_t espnow_add_peer(size_t n_args, const mp_obj_t *args, mp_map_t *k
     _update_peer_info(&peer, n_args - 2, args + 2, kw_args);
 
     check_esp_err(esp_now_add_peer(&peer));
+    espnow_apply_rate_to_existing_peers(_get_singleton());
     _update_peer_count();
 
     return mp_const_none;
@@ -762,6 +798,7 @@ static mp_obj_t espnow_mod_peer(size_t n_args, const mp_obj_t *args, mp_map_t *k
     _update_peer_info(&peer, n_args - 2, args + 2, kw_args);
 
     check_esp_err(esp_now_mod_peer(&peer));
+    espnow_apply_rate_to_existing_peers(_get_singleton());
     _update_peer_count();
 
     return mp_const_none;
@@ -896,5 +933,17 @@ const mp_obj_module_t mp_module_espnow = {
 
 MP_REGISTER_MODULE(MP_QSTR__espnow, mp_module_espnow);
 MP_REGISTER_ROOT_POINTER(struct _esp_espnow_obj_t *espnow_singleton);
+
+#else
+
+static const mp_rom_map_elem_t espnow_globals_table[] = {
+    { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR__espnow) },
+};
+static MP_DEFINE_CONST_DICT(espnow_globals_dict, espnow_globals_table);
+
+const mp_obj_module_t mp_module_espnow = {
+    .base = { &mp_type_module },
+    .globals = (mp_obj_dict_t *)&espnow_globals_dict,
+};
 
 #endif // MICROPY_PY_ESPNOW

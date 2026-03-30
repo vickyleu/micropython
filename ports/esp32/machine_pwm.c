@@ -35,7 +35,11 @@
 #include "py/mphal.h"
 #include "esp_err.h"
 #include "driver/ledc.h"
+#if ESP_IDF_VERSION_MAJOR >= 6
+#include "hal/ledc_periph.h"
+#else
 #include "soc/ledc_periph.h"
+#endif
 #include "soc/gpio_sig_map.h"
 #include "esp_clk_tree.h"
 #include "py/mpprint.h"

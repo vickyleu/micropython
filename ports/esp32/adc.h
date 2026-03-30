@@ -32,6 +32,10 @@
 #include "esp_adc/adc_oneshot.h"
 #include "esp_adc/adc_cali_scheme.h"
 
+#if ESP_IDF_VERSION_MAJOR >= 6
+#define ADC_ATTEN_DB_11 ADC_ATTEN_DB_12
+#endif
+
 #define ADC_ATTEN_COUNT SOC_ADC_ATTEN_NUM
 #define ADC_ATTEN_MIN ADC_ATTEN_DB_0
 #define ADC_ATTEN_MAX ADC_ATTEN_DB_11

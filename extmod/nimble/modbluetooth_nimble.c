@@ -584,12 +584,17 @@ void nimble_reset_gatts_bss(void) {
     // These variables are defined in ble_hs.c and are only ever incremented
     // (during service registration) and never reset.
     // See https://github.com/apache/mynewt-nimble/issues/896
-    extern uint16_t ble_hs_max_attrs;
-    extern uint16_t ble_hs_max_services;
-    extern uint16_t ble_hs_max_client_configs;
+    #if MYNEWT_VAL(BLE_STATIC_TO_DYNAMIC)
+    if (ble_hs_state_ctx != NULL) {
+        ble_hs_state_ctx->max_attrs = 0;
+        ble_hs_state_ctx->max_services = 0;
+        ble_hs_state_ctx->max_client_configs = 0;
+    }
+    #else
     ble_hs_max_attrs = 0;
     ble_hs_max_services = 0;
     ble_hs_max_client_configs = 0;
+    #endif
 }
 
 int mp_bluetooth_init(void) {

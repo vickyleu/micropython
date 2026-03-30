@@ -29,6 +29,17 @@
 #include "esp_wifi_types.h"
 #include "esp_netif.h"
 
+#if ESP_IDF_VERSION_MAJOR >= 6
+typedef enum {
+    ESP_IF_WIFI_STA = WIFI_IF_STA,
+    ESP_IF_WIFI_AP = WIFI_IF_AP,
+    ESP_IF_ETH = 2,
+} esp_interface_t;
+
+#define WIFI_AUTH_WPA3_EXT_PSK WIFI_AUTH_WPA3_PSK
+#define WIFI_AUTH_WPA3_EXT_PSK_MIXED_MODE WIFI_AUTH_WPA3_PSK
+#endif
+
 // lan867x component requires Original ESP32
 #if CONFIG_IDF_TARGET_ESP32
 #define PHY_LAN867X_ENABLED (1)

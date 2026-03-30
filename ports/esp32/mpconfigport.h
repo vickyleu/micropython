@@ -6,6 +6,7 @@
 
 #include <stdint.h>
 #include <alloca.h>
+#include "esp_idf_version.h"
 #include "esp_random.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"

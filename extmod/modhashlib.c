@@ -38,7 +38,11 @@
 #if MICROPY_PY_HASHLIB_SHA256
 
 #if MICROPY_SSL_MBEDTLS
-#include "mbedtls/sha256.h"
+    #if MBEDTLS_MAJOR_VERSION >= 4
+    #include "mbedtls/private/sha256.h"
+    #else
+    #include "mbedtls/sha256.h"
+    #endif
 #else
 #include "lib/crypto-algorithms/sha256.h"
 #endif
@@ -52,8 +56,12 @@
 #endif
 
 #if MICROPY_SSL_MBEDTLS
-#include "mbedtls/md5.h"
-#include "mbedtls/sha1.h"
+    #if MBEDTLS_MAJOR_VERSION >= 4
+    #include "mbedtls/md.h"
+    #else
+    #include "mbedtls/md5.h"
+    #include "mbedtls/sha1.h"
+    #endif
 #endif
 
 #endif
@@ -203,7 +211,7 @@ static mp_obj_t hashlib_sha1_digest(mp_obj_t self_in) {
 
 #if MICROPY_SSL_MBEDTLS
 
-#if MBEDTLS_VERSION_NUMBER < 0x02070000 || MBEDTLS_VERSION_NUMBER >= 0x03000000
+#if MBEDTLS_MAJOR_VERSION < 4 && (MBEDTLS_VERSION_NUMBER < 0x02070000 || MBEDTLS_VERSION_NUMBER >= 0x03000000)
 #define mbedtls_sha1_starts_ret mbedtls_sha1_starts
 #define mbedtls_sha1_update_ret mbedtls_sha1_update
 #define mbedtls_sha1_finish_ret mbedtls_sha1_finish
@@ -211,10 +219,25 @@ static mp_obj_t hashlib_sha1_digest(mp_obj_t self_in) {
 
 static mp_obj_t hashlib_sha1_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 0, 1, false);
+    #if MBEDTLS_MAJOR_VERSION >= 4
+    const mbedtls_md_info_t *md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA1);
+    if (md_info == NULL) {
+        mp_raise_ValueError(MP_ERROR_TEXT("sha1 not available"));
+    }
+    mp_obj_hash_t *o = mp_obj_malloc_var(mp_obj_hash_t, state, char, sizeof(mbedtls_md_context_t), type);
+    o->final = false;
+    mbedtls_md_context_t *ctx = (mbedtls_md_context_t *)o->state;
+    mbedtls_md_init(ctx);
+    if (mbedtls_md_setup(ctx, md_info, 0) != 0 || mbedtls_md_starts(ctx) != 0) {
+        mbedtls_md_free(ctx);
+        mp_raise_ValueError(MP_ERROR_TEXT("sha1 not available"));
+    }
+    #else
     mp_obj_hash_t *o = mp_obj_malloc_var(mp_obj_hash_t, state, char, sizeof(mbedtls_sha1_context), type);
     o->final = false;
     mbedtls_sha1_init((mbedtls_sha1_context *)o->state);
     mbedtls_sha1_starts_ret((mbedtls_sha1_context *)o->state);
+    #endif
     if (n_args == 1) {
         hashlib_sha1_update(MP_OBJ_FROM_PTR(o), args[0]);
     }
@@ -226,7 +249,13 @@ static mp_obj_t hashlib_sha1_update(mp_obj_t self_in, mp_obj_t arg) {
     hashlib_ensure_not_final(self);
     mp_buffer_info_t bufinfo;
     mp_get_buffer_raise(arg, &bufinfo, MP_BUFFER_READ);
+    #if MBEDTLS_MAJOR_VERSION >= 4
+    if (mbedtls_md_update((mbedtls_md_context_t *)self->state, bufinfo.buf, bufinfo.len) != 0) {
+        mp_raise_ValueError(MP_ERROR_TEXT("sha1 update failed"));
+    }
+    #else
     mbedtls_sha1_update_ret((mbedtls_sha1_context *)self->state, bufinfo.buf, bufinfo.len);
+    #endif
     return mp_const_none;
 }
 
@@ -236,8 +265,16 @@ static mp_obj_t hashlib_sha1_digest(mp_obj_t self_in) {
     self->final = true;
     vstr_t vstr;
     vstr_init_len(&vstr, 20);
+    #if MBEDTLS_MAJOR_VERSION >= 4
+    if (mbedtls_md_finish((mbedtls_md_context_t *)self->state, (byte *)vstr.buf) != 0) {
+        mbedtls_md_free((mbedtls_md_context_t *)self->state);
+        mp_raise_ValueError(MP_ERROR_TEXT("sha1 digest failed"));
+    }
+    mbedtls_md_free((mbedtls_md_context_t *)self->state);
+    #else
     mbedtls_sha1_finish_ret((mbedtls_sha1_context *)self->state, (byte *)vstr.buf);
     mbedtls_sha1_free((mbedtls_sha1_context *)self->state);
+    #endif
     return mp_obj_new_bytes_from_vstr(&vstr);
 }
 #endif
@@ -297,7 +334,7 @@ static mp_obj_t hashlib_md5_digest(mp_obj_t self_in) {
 
 #if MICROPY_SSL_MBEDTLS
 
-#if MBEDTLS_VERSION_NUMBER < 0x02070000 || MBEDTLS_VERSION_NUMBER >= 0x03000000
+#if MBEDTLS_MAJOR_VERSION < 4 && (MBEDTLS_VERSION_NUMBER < 0x02070000 || MBEDTLS_VERSION_NUMBER >= 0x03000000)
 #define mbedtls_md5_starts_ret mbedtls_md5_starts
 #define mbedtls_md5_update_ret mbedtls_md5_update
 #define mbedtls_md5_finish_ret mbedtls_md5_finish
@@ -305,10 +342,25 @@ static mp_obj_t hashlib_md5_digest(mp_obj_t self_in) {
 
 static mp_obj_t hashlib_md5_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 0, 1, false);
+    #if MBEDTLS_MAJOR_VERSION >= 4
+    const mbedtls_md_info_t *md_info = mbedtls_md_info_from_type(MBEDTLS_MD_MD5);
+    if (md_info == NULL) {
+        mp_raise_ValueError(MP_ERROR_TEXT("md5 not available"));
+    }
+    mp_obj_hash_t *o = mp_obj_malloc_var(mp_obj_hash_t, state, char, sizeof(mbedtls_md_context_t), type);
+    o->final = false;
+    mbedtls_md_context_t *ctx = (mbedtls_md_context_t *)o->state;
+    mbedtls_md_init(ctx);
+    if (mbedtls_md_setup(ctx, md_info, 0) != 0 || mbedtls_md_starts(ctx) != 0) {
+        mbedtls_md_free(ctx);
+        mp_raise_ValueError(MP_ERROR_TEXT("md5 not available"));
+    }
+    #else
     mp_obj_hash_t *o = mp_obj_malloc_var(mp_obj_hash_t, state, char, sizeof(mbedtls_md5_context), type);
     o->final = false;
     mbedtls_md5_init((mbedtls_md5_context *)o->state);
     mbedtls_md5_starts_ret((mbedtls_md5_context *)o->state);
+    #endif
     if (n_args == 1) {
         hashlib_md5_update(MP_OBJ_FROM_PTR(o), args[0]);
     }
@@ -320,7 +372,13 @@ static mp_obj_t hashlib_md5_update(mp_obj_t self_in, mp_obj_t arg) {
     hashlib_ensure_not_final(self);
     mp_buffer_info_t bufinfo;
     mp_get_buffer_raise(arg, &bufinfo, MP_BUFFER_READ);
+    #if MBEDTLS_MAJOR_VERSION >= 4
+    if (mbedtls_md_update((mbedtls_md_context_t *)self->state, bufinfo.buf, bufinfo.len) != 0) {
+        mp_raise_ValueError(MP_ERROR_TEXT("md5 update failed"));
+    }
+    #else
     mbedtls_md5_update_ret((mbedtls_md5_context *)self->state, bufinfo.buf, bufinfo.len);
+    #endif
     return mp_const_none;
 }
 
@@ -330,8 +388,16 @@ static mp_obj_t hashlib_md5_digest(mp_obj_t self_in) {
     self->final = true;
     vstr_t vstr;
     vstr_init_len(&vstr, 16);
+    #if MBEDTLS_MAJOR_VERSION >= 4
+    if (mbedtls_md_finish((mbedtls_md_context_t *)self->state, (byte *)vstr.buf) != 0) {
+        mbedtls_md_free((mbedtls_md_context_t *)self->state);
+        mp_raise_ValueError(MP_ERROR_TEXT("md5 digest failed"));
+    }
+    mbedtls_md_free((mbedtls_md_context_t *)self->state);
+    #else
     mbedtls_md5_finish_ret((mbedtls_md5_context *)self->state, (byte *)vstr.buf);
     mbedtls_md5_free((mbedtls_md5_context *)self->state);
+    #endif
     return mp_obj_new_bytes_from_vstr(&vstr);
 }
 #endif // MICROPY_SSL_MBEDTLS

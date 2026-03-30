@@ -1,0 +1,70 @@
+name: esp32 idf6 s3 prebuilt
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - course/idf6-esp32s3
+    paths:
+      - '.github/workflows/esp32_idf6_s3_prebuilt.yml'
+      - 'tools/**'
+      - 'py/**'
+      - 'extmod/**'
+      - 'shared/**'
+      - 'drivers/**'
+      - 'ports/esp32/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup ESP-IDF 6.0
+        uses: ./.github/actions/setup_esp32
+        with:
+          idf_ver: v6.0
+          ccache_key: esp32-generic-s3-idf6-prebuilt
+
+      - name: Build ESP32_GENERIC_S3 firmware
+        shell: bash
+        run: |
+          source esp-idf/export.sh
+          make -C mpy-cross
+          make -C ports/esp32 submodules
+          rm -rf ports/esp32/managed_components
+          make -C ports/esp32 BOARD=ESP32_GENERIC_S3
+
+      - name: Package firmware
+        shell: bash
+        run: |
+          OUT_DIR=dist/esp32-generic-s3-idf6
+          mkdir -p "${OUT_DIR}"
+          cp ports/esp32/build-ESP32_GENERIC_S3/bootloader/bootloader.bin "${OUT_DIR}/"
+          cp ports/esp32/build-ESP32_GENERIC_S3/partition_table/partition-table.bin "${OUT_DIR}/"
+          cp ports/esp32/build-ESP32_GENERIC_S3/micropython.bin "${OUT_DIR}/"
+          cat > "${OUT_DIR}/FLASH.txt" <<'EOF'
+          使用 esptool 烧录以下 3 个文件：
+
+          0x0000  bootloader.bin
+          0x8000  partition-table.bin
+          0x10000 micropython.bin
+
+          示例命令：
+          python -m esptool --chip esp32s3 -b 460800 \
+            --before default-reset --after hard-reset write-flash \
+            --flash-mode dio --flash-size 4MB --flash-freq 80m \
+            0x0000 bootloader.bin \
+            0x8000 partition-table.bin \
+            0x10000 micropython.bin
+          EOF
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: micropython-esp32-generic-s3-idf6
+          path: dist/esp32-generic-s3-idf6

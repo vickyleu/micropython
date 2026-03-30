@@ -1770,4 +1770,16 @@ int mp_bluetooth_gatts_db_resize(mp_gatts_db_t db, uint16_t handle, size_t len, 
 
 MP_REGISTER_ROOT_POINTER(mp_obj_t bluetooth);
 
+#else
+
+static const mp_rom_map_elem_t mp_module_bluetooth_globals_table[] = {
+    { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_bluetooth) },
+};
+static MP_DEFINE_CONST_DICT(mp_module_bluetooth_globals, mp_module_bluetooth_globals_table);
+
+const mp_obj_module_t mp_module_bluetooth = {
+    .base = { &mp_type_module },
+    .globals = (mp_obj_dict_t *)&mp_module_bluetooth_globals,
+};
+
 #endif // MICROPY_PY_BLUETOOTH

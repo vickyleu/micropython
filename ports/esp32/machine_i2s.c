@@ -27,8 +27,11 @@
 // This file is never compiled standalone, it's included directly from
 // extmod/machine_i2s.c via MICROPY_PY_MACHINE_I2S_INCLUDEFILE.
 
+#if MICROPY_PY_MACHINE_I2S
+
 #include "py/mphal.h"
 #include "driver/i2s_std.h"
+#include "hal/i2s_ll.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -43,6 +46,12 @@
 #define I2S_TASK_STACK_SIZE      (2048)
 
 #define DMA_BUF_LEN_IN_I2S_FRAMES (256)
+
+#if defined(SOC_I2S_NUM)
+#define MICROPY_I2S_PORT_COUNT (SOC_I2S_NUM)
+#else
+#define MICROPY_I2S_PORT_COUNT (I2S_LL_GET(INST_NUM))
+#endif
 
 // The transform buffer is used with the readinto() method to bridge the opaque DMA memory on the ESP devices
 // with the app buffer.  It facilitates audio sample transformations.  e.g.  32-bits samples to 16-bit samples.
@@ -69,7 +78,7 @@ typedef enum {
 
 typedef struct _machine_i2s_obj_t {
     mp_obj_base_t base;
-    i2s_port_t i2s_id;
+    int i2s_id;
     i2s_chan_handle_t i2s_chan_handle;
     mp_hal_pin_obj_t sck;
     mp_hal_pin_obj_t ws;
@@ -101,7 +110,7 @@ static const int8_t i2s_frame_map[NUM_I2S_USER_FORMATS][I2S_RX_FRAME_SIZE_IN_BYT
 };
 
 void machine_i2s_init0() {
-    for (i2s_port_t p = 0; p < I2S_NUM_AUTO; p++) {
+    for (size_t p = 0; p < MICROPY_I2S_PORT_COUNT; ++p) {
         MP_STATE_PORT(machine_i2s_obj)[p] = NULL;
     }
 }
@@ -400,7 +409,7 @@ static void mp_machine_i2s_init_helper(machine_i2s_obj_t *self, mp_arg_val_t *ar
 }
 
 static machine_i2s_obj_t *mp_machine_i2s_make_new_instance(mp_int_t i2s_id) {
-    if (i2s_id < 0 || i2s_id >= I2S_NUM_AUTO) {
+    if (i2s_id < 0 || i2s_id >= MICROPY_I2S_PORT_COUNT) {
         mp_raise_ValueError(MP_ERROR_TEXT("invalid id"));
     }
 
@@ -470,4 +479,6 @@ static void mp_machine_i2s_irq_update(machine_i2s_obj_t *self) {
     }
 }
 
-MP_REGISTER_ROOT_POINTER(struct _machine_i2s_obj_t *machine_i2s_obj[SOC_I2S_NUM]);
+MP_REGISTER_ROOT_POINTER(struct _machine_i2s_obj_t *machine_i2s_obj[MICROPY_I2S_PORT_COUNT]);
+
+#endif // MICROPY_PY_MACHINE_I2S

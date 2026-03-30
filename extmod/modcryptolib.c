@@ -61,7 +61,12 @@ struct ctr_params {
 #endif
 
 #if MICROPY_SSL_MBEDTLS
-#include <mbedtls/aes.h>
+    #if MBEDTLS_MAJOR_VERSION >= 4
+    #define MBEDTLS_DECLARE_PRIVATE_IDENTIFIERS
+    #include <mbedtls/private/aes.h>
+    #else
+    #include <mbedtls/aes.h>
+    #endif
 
 // we can't run mbedtls AES key schedule until we know whether we're used for encrypt or decrypt.
 // therefore, we store the key & keysize and on the first call to encrypt/decrypt we override them

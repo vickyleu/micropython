@@ -37,7 +37,11 @@
 
 #include "hal/timer_hal.h"
 #include "hal/timer_ll.h"
+#if ESP_IDF_VERSION_MAJOR >= 6
+#include "hal/timer_periph.h"
+#else
 #include "soc/timer_periph.h"
+#endif
 #include "esp_private/esp_clk_tree_common.h"
 #include "esp_private/periph_ctrl.h"
 #include "machine_timer.h"
@@ -122,7 +126,11 @@ static mp_obj_t machine_timer_make_new(const mp_obj_type_t *type, size_t n_args,
 
     // Create the new timer.
     uint32_t timer_number = mp_obj_get_int(args[0]);
+    #if ESP_IDF_VERSION_MAJOR >= 6
+    if (timer_number >= TIMER_LL_GPTIMERS_TOTAL) {
+    #else
     if (timer_number >= SOC_TIMER_GROUP_TOTAL_TIMERS) {
+    #endif
         mp_raise_ValueError(MP_ERROR_TEXT("invalid Timer number"));
     }
     machine_timer_obj_t *self = machine_timer_create(timer_number);
@@ -175,12 +183,21 @@ void machine_timer_enable(machine_timer_obj_t *self) {
     // Initialise the timer.
     timer_hal_init(&self->hal_context, self->group, self->index);
 
+    #if ESP_IDF_VERSION_MAJOR >= 6
+    PERIPH_RCC_ACQUIRE_ATOMIC(soc_timg_gptimer_signals[self->group][0].parent_module, ref_count) {
+        if (ref_count == 0) {
+            timg_ll_enable_bus_clock(self->group, true);
+            timg_ll_reset_register(self->group);
+        }
+    }
+    #else
     PERIPH_RCC_ACQUIRE_ATOMIC(timer_group_periph_signals.groups[self->index].module, ref_count) {
         if (ref_count == 0) {
             timer_ll_enable_bus_clock(self->index, true);
             timer_ll_reset_register(self->index);
         }
     }
+    #endif
 
     timer_ll_enable_counter(self->hal_context.dev, self->index, false);
 
@@ -209,8 +226,13 @@ void machine_timer_enable(machine_timer_obj_t *self) {
     if (self->handle) {
         ESP_ERROR_CHECK(esp_intr_enable(self->handle));
     } else {
+        #if ESP_IDF_VERSION_MAJOR >= 6
+        int irq_id = soc_timg_gptimer_signals[self->group][self->index].irq_id;
+        #else
+        int irq_id = timer_group_periph_signals.groups[self->group].timer_irq_id[self->index];
+        #endif
         ESP_ERROR_CHECK(esp_intr_alloc(
-            timer_group_periph_signals.groups[self->group].timer_irq_id[self->index],
+            irq_id,
             TIMER_FLAGS,
             machine_timer_isr,
             self,

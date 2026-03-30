@@ -32,7 +32,11 @@
 
 #include "hal/timer_hal.h"
 #include "hal/timer_ll.h"
+#if ESP_IDF_VERSION_MAJOR >= 6
+#include "hal/timer_periph.h"
+#else
 #include "soc/timer_periph.h"
+#endif
 
 typedef struct _machine_timer_obj_t {
     mp_obj_base_t base;
