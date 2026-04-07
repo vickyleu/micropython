@@ -200,11 +200,15 @@ static void machine_sleep_helper(wake_type_t wake_type, size_t n_args, const mp_
 
         if (MACHINE_WAKE_DEEPSLEEP == wake_type) {
             #if SOC_GPIO_SUPPORT_DEEPSLEEP_WAKEUP
+            #if CONFIG_IDF_TARGET_ESP32P4
+            mp_raise_ValueError(MP_ERROR_TEXT("DEEPSLEEP with gpio pins not supported on this chip"));
+            #else
             if (ESP_OK != esp_deep_sleep_enable_gpio_wakeup(
                 machine_rtc_config.gpio_pins,
                 machine_rtc_config.gpio_level ? ESP_GPIO_WAKEUP_GPIO_HIGH : ESP_GPIO_WAKEUP_GPIO_LOW)) {
                 mp_raise_ValueError(MP_ERROR_TEXT("wake-up pin not supported"));
             }
+            #endif
             #endif
         } else {
             esp_sleep_enable_gpio_wakeup();
