@@ -313,6 +313,18 @@ target_include_directories(${MICROPY_TARGET} PUBLIC
     ${IDF_PATH}/components/bt/host/nimble/nimble
 )
 
+# Ensure the vendored tinyusb component can find MicroPython's tusb_config.h
+# and related port headers when it is compiled as a separate IDF component.
+if(TARGET __idf_espressif__tinyusb)
+    target_include_directories(__idf_espressif__tinyusb PRIVATE
+        ${MICROPY_DIR}/shared/tinyusb
+        ${MICROPY_DIR}
+        ${MICROPY_PORT_DIR}
+        ${MICROPY_BOARD_DIR}
+        ${CMAKE_BINARY_DIR}
+    )
+endif()
+
 # Add additional extmod and usermod components.
 if (MICROPY_PY_BTREE)
     target_link_libraries(${MICROPY_TARGET} $<TARGET_OBJECTS:micropy_extmod_btree>)

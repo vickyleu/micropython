@@ -59,12 +59,16 @@ endforeach()
 configure_file(${CMAKE_BINARY_DIR}/sdkconfig.combined.in ${CMAKE_BINARY_DIR}/sdkconfig.combined COPYONLY)
 set(SDKCONFIG_DEFAULTS ${CMAKE_BINARY_DIR}/sdkconfig.combined)
 
-# Include main IDF cmake file.
-set(EXTRA_COMPONENT_DIRS
+# Include any vendored managed components if they already exist locally.
+set(EXTRA_COMPONENT_DIRS "")
+foreach(MICROPY_MANAGED_COMPONENT
     ${CMAKE_CURRENT_LIST_DIR}/managed_components/espressif__mdns
     ${CMAKE_CURRENT_LIST_DIR}/managed_components/espressif__tinyusb
 )
-set(ENV{IDF_COMPONENT_MANAGER} 0)
+    if(EXISTS ${MICROPY_MANAGED_COMPONENT})
+        list(APPEND EXTRA_COMPONENT_DIRS ${MICROPY_MANAGED_COMPONENT})
+    endif()
+endforeach()
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
 # Generate individual dependencies.lock files based on chip target
